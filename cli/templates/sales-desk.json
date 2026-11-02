@@ -1,0 +1,72 @@
+{
+  "name": "sales-desk",
+  "kind": "company",
+  "summary": "A sales desk: researches leads that fit, writes specific outreach drafts and offers, and keeps the pipeline; the owner approves every message before it goes out.",
+  "room": "sales",
+  "goal": "What do you sell, to whom, and how many new conversations do you want this week?",
+  "example": "A $5k/month managed AI team for agencies of 10-50 people in the UK; 20 researched leads and 10 outreach drafts this week",
+  "lead": "desk",
+  "approve": [
+    "the offer one-pager",
+    "every outreach message, before it is sent"
+  ],
+  "review": {
+    "by": "reviewer",
+    "checks": "each lead's facts against its source link, that each draft is specific to its lead and true about the offer, and nothing is promised that the offer does not say"
+  },
+  "loops": [
+    {
+      "target": "researcher",
+      "every": "0 11 * * 1-5",
+      "prompt": "Research today's new leads that fit the profile and add them to artefacts/pipeline.md with source links; tell desk how many."
+    }
+  ],
+  "rules": [
+    "Work only in this folder; put what you make in artefacts/.",
+    "Facts, prices and claims come from real, public sources, each with its link and the date you checked it. Invent no customers, quotes, results or numbers.",
+    "Send, publish or submit nothing outside this room without the owner's approval: ask with hub_request and act only on APPROVED.",
+    "Public information about leads only: work contact details, no scraping behind logins, nothing personal."
+  ],
+  "roles": [
+    {
+      "name": "desk",
+      "agent": "claude",
+      "budget": 20,
+      "does": "sets the profile and the offer, runs the pipeline, takes drafts to the owner",
+      "instructions": "First post the plan with hub_say: the customer profile, where to find them, the week's numbers. Write artefacts/offer.md (the one-pager) and ask the owner to approve it with hub_request. Give researcher the profile; when reviewer passes drafts, ask the owner to approve the batch, listing each lead and message."
+    },
+    {
+      "name": "researcher",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "finds leads that fit, with sources",
+      "instructions": "Find leads that fit the profile from public sources. Keep artefacts/pipeline.md: one row per lead (name, company, role, why them, source link, status). Hand new rows to writer with hub_send."
+    },
+    {
+      "name": "writer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "writes a specific draft for each lead",
+      "instructions": "For each new lead, write a short outreach draft in artefacts/drafts/<lead>.md: one line on why them (from the source), what the offer does for them, one clear ask. No templates that could go to anyone. Hand them to reviewer."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "checks every lead and draft",
+      "instructions": "Check each lead and draft as the review step says. Send problems back to writer or researcher. When a batch holds, tell desk: passed, with what you checked."
+    }
+  ]
+}

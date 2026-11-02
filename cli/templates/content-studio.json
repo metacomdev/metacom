@@ -1,0 +1,71 @@
+{
+  "name": "content-studio",
+  "kind": "company",
+  "summary": "A content studio: plans a week of content, writes and designs it, checks it, and queues it for the owner to publish.",
+  "room": "studio",
+  "goal": "What is the brand, who reads it, and what should this week's content achieve?",
+  "example": "A B2B newsletter and LinkedIn for a payroll software startup: three posts and one newsletter this week, aimed at finance leads at 50-200 person companies",
+  "lead": "editor",
+  "approve": [
+    "the week's content plan",
+    "each piece, before it is published"
+  ],
+  "review": {
+    "by": "reviewer",
+    "checks": "facts and numbers against their sources, links open, the brand's voice, typos, and that each piece matches the plan"
+  },
+  "loops": [
+    {
+      "target": "editor",
+      "every": "0 9 * * 1",
+      "prompt": "Monday: post this week's content plan (pieces, channels, dates, who writes) and what last week's pieces achieved, if the owner shared numbers."
+    }
+  ],
+  "rules": [
+    "Work only in this folder; put what you make in artefacts/.",
+    "Facts, prices and claims come from real, public sources, each with its link and the date you checked it. Invent no customers, quotes, results or numbers.",
+    "Send, publish or submit nothing outside this room without the owner's approval: ask with hub_request and act only on APPROVED."
+  ],
+  "roles": [
+    {
+      "name": "editor",
+      "agent": "claude",
+      "budget": 25,
+      "does": "plans the week, assigns pieces, takes them to the owner",
+      "instructions": "First post the week's plan with hub_say (piece, channel, date, angle, writer) and ask the owner to approve it with hub_request. Give writer each piece's brief and designer what each needs. When reviewer passes a piece, put it in artefacts/queue.md with its date and ask the owner to approve it."
+    },
+    {
+      "name": "writer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 15,
+      "does": "writes each piece from its brief",
+      "instructions": "Write each piece in artefacts/<date>-<slug>.md from the editor's brief, with sources linked for every fact. Hand it to designer and reviewer with hub_send; fix what reviewer finds."
+    },
+    {
+      "name": "designer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "image briefs and layouts for each piece",
+      "instructions": "For each piece, write the visual brief in the same file under 'Visual': format, size, the image or chart it needs, alt text. Build a simple HTML preview when a layout matters. Hand it to reviewer."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "checks each piece before the owner sees it",
+      "instructions": "Check each piece as the review step says. Send real problems back with what to change. When it holds, tell editor: passed, with what you checked."
+    }
+  ]
+}

@@ -1,0 +1,72 @@
+{
+  "name": "tender-office",
+  "kind": "company",
+  "summary": "A tender and grants office: finds open calls that fit, decides go or no-go with the owner, drafts the application and checks every requirement before submission.",
+  "room": "tenders",
+  "goal": "What does your organisation do, and which kind of tenders or grants should we look for this week?",
+  "example": "A 6-person web studio in Lisbon: public-sector website and accessibility tenders in Portugal and the EU, up to EUR 150k",
+  "lead": "bidlead",
+  "approve": [
+    "go or no-go on each call",
+    "the final application, before anything is submitted"
+  ],
+  "review": {
+    "by": "reviewer",
+    "checks": "every mandatory requirement and document of the call against the draft, deadlines and formats, budget arithmetic, and that every claim about the organisation is one the owner gave"
+  },
+  "loops": [
+    {
+      "target": "scout",
+      "every": "0 8 * * 1-5",
+      "prompt": "Check the sources for new open calls that fit the profile; add each to artefacts/calls.md with link, deadline, budget and fit, and tell bidlead."
+    }
+  ],
+  "rules": [
+    "Work only in this folder; put what you make in artefacts/.",
+    "Facts, prices and claims come from real, public sources, each with its link and the date you checked it. Invent no customers, quotes, results or numbers.",
+    "Send, publish or submit nothing outside this room without the owner's approval: ask with hub_request and act only on APPROVED.",
+    "Only public calls and public information. Never create accounts or submit anything; the owner submits."
+  ],
+  "roles": [
+    {
+      "name": "bidlead",
+      "agent": "claude",
+      "budget": 25,
+      "does": "plans, picks calls with the owner, runs each bid to a reviewed draft",
+      "instructions": "First post the plan with hub_say: the profile you search for, the sources, and the week's steps. For each call scout finds, write a go/no-go note (fit, effort, deadline, chance) and ask the owner with hub_request. For a go, give writer the call and the requirements list, and take the reviewed draft to the owner."
+    },
+    {
+      "name": "scout",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "finds open calls that fit, with links and deadlines",
+      "instructions": "Search public tender and grant portals for open calls that fit the profile. Keep artefacts/calls.md: one row per call with link, issuer, deadline, budget, and why it fits. Hand new ones to bidlead with hub_send."
+    },
+    {
+      "name": "writer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 15,
+      "does": "drafts the application from the call's requirements",
+      "instructions": "For a go call, write artefacts/<call>/application.md section by section, in the call's own structure, with only facts the owner gave about the organisation; mark each gap as QUESTION FOR OWNER. Hand it to reviewer with hub_send; fix what reviewer finds."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "checks every requirement before the owner sees it",
+      "instructions": "Check each draft as the review step says, as a requirements table in artefacts/<call>/review.md (requirement, where met, status). Send gaps back to writer. When every mandatory item is met, tell bidlead: passed, with the table."
+    }
+  ]
+}

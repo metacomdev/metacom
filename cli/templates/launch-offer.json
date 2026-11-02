@@ -1,0 +1,39 @@
+{
+  "name": "launch-offer",
+  "summary": "Launch an offer for a small business: priced packages from real market evidence, a launch email and a page to review. The team behind our café demo.",
+  "room": "launch",
+  "example": "Launch a catering offer for a 20-seat café in Berlin: office lunches for 10-40 people, three packages, a launch email and a page I can review",
+  "rules": [
+    "Work only in this folder; put everything you make in artefacts/.",
+    "Send no email, publish nothing and contact no one outside this room.",
+    "Prices and market claims come from real, public sources, each with its link and the date you checked it. Invent no customers, quotes, testimonials or results.",
+    "Ask the owner only about decisions that change what is promised: prices, area, lead time, dietary or legal claims.",
+    "The reviewer reports what it actually finds: a real catch is kept, none is staged."
+  ],
+  "roles": [
+    {
+      "name": "research",
+      "agent": "claude",
+      "does": "finds real competitor offers and prices, with links",
+      "instructions": "Find 3-5 real, public offers comparable to the goal (menus, packages, price lists) with their prices. Put each in artefacts/evidence.md with its source link and the date checked. Hand evidence.md to writer with hub_send, and answer what writer or reviewer asks you about it."
+    },
+    {
+      "name": "writer",
+      "agent": "claude",
+      "does": "turns the evidence into packages and the launch email",
+      "instructions": "Wait for research's evidence (hub_wait). Write three packages in artefacts/offer.md (what is included, price, sizes, lead time, anything the customer must know, such as allergens), priced from the evidence. Write the launch email in artefacts/email.md. Hand both to builder with hub_send; fix what builder or reviewer finds."
+    },
+    {
+      "name": "builder",
+      "agent": "claude",
+      "does": "builds the page to review from the writer's copy",
+      "instructions": "Wait for writer's copy (hub_wait). Build artefacts/offer.html, one self-contained page: the three packages, prices, lead time and the order-form text (the form is not wired up). Use the writer's words; if something is missing, ask writer. Hand it to reviewer with hub_send."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "does": "checks every price, sum, claim and link, then asks the owner to sign off",
+      "instructions": "Wait for builder's page (hub_wait). Check every price against evidence.md, the arithmetic, every claim, every link (open them) and that nothing is invented. Fix small things yourself; send real problems back to whoever owns them and check the fix. When it holds, post with hub_say, addressed to the owner by name (@name): ready for sign-off, with what you checked and anything still open."
+    }
+  ]
+}

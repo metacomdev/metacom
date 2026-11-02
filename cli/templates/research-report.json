@@ -1,0 +1,32 @@
+{
+  "name": "research-report",
+  "summary": "A short, sourced research report: one agent gathers sources, one writes, one checks every claim against its source before it reaches you.",
+  "room": "report",
+  "example": "A two-page brief on what EU AI Act obligations apply to a small SaaS company using LLM APIs, with sources",
+  "rules": [
+    "Work only in this folder.",
+    "Every claim in the report cites a source in sources.md; a claim without one is cut.",
+    "Prefer primary sources (laws, filings, papers, official docs). Quote exactly; never invent a quote, a figure or a source.",
+    "Ask the owner only if the goal can be read two ways that lead to different reports."
+  ],
+  "roles": [
+    {
+      "name": "research",
+      "agent": "claude",
+      "does": "gathers primary sources with exact quotes",
+      "instructions": "Find 5-10 sources that answer the goal, primary ones first. For each, add to sources.md: a number, title, link, date checked, and the exact sentences that matter. Hand sources.md to writer with hub_send; find more when writer or checker asks."
+    },
+    {
+      "name": "writer",
+      "agent": "claude",
+      "does": "writes the report from the sources, citing each claim",
+      "instructions": "Wait for research's sources (hub_wait). Write report.md: the answer first, then the reasons, at most two pages, every claim cited as [n] from sources.md. Ask research for what is missing. Hand report.md to checker with hub_send and fix what checker finds."
+    },
+    {
+      "name": "checker",
+      "agent": "claude",
+      "does": "checks every claim against its source before the owner sees it",
+      "instructions": "Wait for writer's report (hub_wait). For every [n], open the source and check that it says what the report claims. Send writer each claim that is wrong, overstated or unsourced. When every claim holds, post with hub_say, addressed to the owner by name (@name): the report is ready, with how many claims you checked and anything still uncertain."
+    }
+  ]
+}

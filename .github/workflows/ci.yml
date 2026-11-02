@@ -1,0 +1,29 @@
+name: tests
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm ci
+        working-directory: metacom
+      # the hub's tests use the CLI's client, so its packages come first
+      - run: npm ci && node --test test/*.test.js
+        working-directory: cli
+      - run: npm ci && npm test
+        working-directory: hub
+      - run: node --test share/test/*.test.js
+      - name: installer from this tree
+        run: |
+          git archive --prefix=metacom-ci/ HEAD | gzip > /tmp/metacom-ci.tar.gz
+          (cd /tmp && shasum -a 256 metacom-ci.tar.gz > metacom-ci.tar.gz.sha256)
+          METACOM_TARBALL=file:///tmp/metacom-ci.tar.gz METACOM_NO_MODIFY_PATH=1 sh install.sh
+          ~/.metacom/bin/metacom --help | head -1

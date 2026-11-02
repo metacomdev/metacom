@@ -1,0 +1,265 @@
+'use strict';
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { execFileSync, spawn } = require('node:child_process');
+
+const TYPES = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.heic': 'image/heic',
+  '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.csv': 'text/csv',
+  '.json': 'application/json',
+  '.zip': 'application/zip',
+  '.log': 'text/plain',
+  '.diff': 'text/plain',
+  '.patch': 'text/plain',
+  '.mp4': 'video/mp4',
+  '.m4v': 'video/x-m4v',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.mkv': 'video/x-matroska',
+  '.avi': 'video/x-msvideo',
+  '.3gp': 'video/3gpp',
+  '.mpeg': 'video/mpeg',
+  '.mpg': 'video/mpeg',
+};
+const MEDIA_DIR = path.join(os.homedir(), '.local', 'share', 'metacom', 'media');
+
+const typeOf = (file) => TYPES[path.extname(file).toLowerCase()] || null;
+
+/// `~/x.png` and quoted or escaped paths as a terminal pastes them (drag a file onto it).
+const resolvePath = (raw) => {
+  let p = String(raw || '').trim();
+  if ((p.startsWith("'") && p.endsWith("'")) || (p.startsWith('"') && p.endsWith('"'))) p = p.slice(1, -1);
+  p = p.replace(/\\ /g, ' ');
+  if (p.startsWith('~/')) p = path.join(os.homedir(), p.slice(2));
+  return path.resolve(p);
+};
+
+/// A pasted line that is just a path to a file we can send, or null.
+const attachable = (text) => {
+  const t = String(text || '').trim();
+  if (!t || t.includes('\n') || !/^(['"]?)(~\/|\/|\.\.?\/)/.test(t)) return null;
+  const file = resolvePath(t);
+  if (!typeOf(file)) return null;
+  try {
+    if (!fs.statSync(file).isFile()) return null;
+  } catch {
+    return null;
+  }
+  return file;
+};
+
+/// Several files dropped on the terminal at once arrive as one line of paths, separated by
+/// spaces, each quoted or with its own spaces escaped. All of them sendable files: the list;
+/// anything else (a sentence that mentions a path): null, and the line stays text.
+const attachables = (text) => {
+  const t = String(text || '').trim();
+  if (!t || t.includes('\n')) return null;
+  const one = attachable(t); // a single path, even one with bare spaces in it
+  if (one) return [one];
+  const parts = t.match(/'[^']*'|"[^"]*"|(?:\\ |\S)+/g) || [];
+  if (parts.length < 2) return null;
+  const files = parts.map(attachable);
+  return files.every(Boolean) ? files : null;
+};
+
+const attachment = (file) => {
+  const type = typeOf(file);
+  if (!type) throw new Error(`${path.basename(file)}: only ${Object.keys(TYPES).join(' ')} can be sent`);
+  const stat = fs.statSync(file);
+  if (!stat.isFile()) throw new Error(`${file} is not a file`);
+  return { file, name: path.basename(file), type, size: stat.size };
+};
+
+const pretty = (bytes) => (bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(0)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
+
+/// POST the file to metacom; returns the media record to put on a message.
+const upload = async ({ http, token, file }) => {
+  const a = attachment(file);
+  const res = await fetch(`${http}/media`, {
+    method: 'POST',
+    headers: { 'Content-Type': a.type, Authorization: `Bearer ${token}`, 'X-Name': encodeURIComponent(a.name) },
+    body: fs.readFileSync(a.file),
+  });
+  if (!res.ok) {
+    let reason = `${res.status}`;
+    try {
+      reason = (await res.json()).error || reason;
+    } catch {
+      // not json
+    }
+    throw new Error(`upload of ${a.name} failed: ${reason}`);
+  }
+  return res.json();
+};
+
+/// GET a message attachment into the local media cache; returns its path.
+const download = async ({ http, url }) => {
+  const m = /^\/media\/([0-9a-f]{32}\.[a-z0-9]{1,5})$/.exec(url || '');
+  if (!m) throw new Error(`bad media url ${url}`);
+  fs.mkdirSync(MEDIA_DIR, { recursive: true, mode: 0o700 });
+  const file = path.join(MEDIA_DIR, m[1]);
+  if (fs.existsSync(file)) return file;
+  const res = await fetch(`${http}${url}`);
+  if (!res.ok) throw new Error(`download of ${url} failed: ${res.status}`);
+  const tmp = `${file}.part`;
+  fs.writeFileSync(tmp, Buffer.from(await res.arrayBuffer()), { mode: 0o600 });
+  fs.renameSync(tmp, file);
+  return file;
+};
+
+/// An attachment saved under its own name in `dir` (~/Downloads by default), without
+/// overwriting: `report.md`, then `report (1).md`. The same file saved again (opened twice)
+/// is found and reused instead of copied. Returns the path.
+const saveAs = async ({ http, media, dir }) => {
+  const cached = await download({ http, url: media.url });
+  const into = resolvePath(dir || path.join(os.homedir(), 'Downloads'));
+  fs.mkdirSync(into, { recursive: true });
+  const name = path.basename(String(media.name || path.basename(cached))) || path.basename(cached);
+  const ext = path.extname(name);
+  const stem = name.slice(0, name.length - ext.length);
+  const data = fs.readFileSync(cached);
+  const same = (f) => fs.statSync(f).size === data.length && fs.readFileSync(f).equals(data);
+  let file = path.join(into, name);
+  for (let i = 1; fs.existsSync(file); i++) {
+    if (same(file)) return file;
+    file = path.join(into, `${stem} (${i})${ext}`);
+  }
+  fs.copyFileSync(cached, file);
+  return file;
+};
+
+/// Hand a file to the desktop: `open` on macOS, `xdg-open` elsewhere. False when that fails.
+const openFile = (file) => {
+  try {
+    execFileSync(process.platform === 'darwin' ? 'open' : 'xdg-open', [file], { stdio: 'ignore', timeout: 5000 });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/// A web address to the browser, without holding the chat up while the opener works (xdg-open
+/// with no desktop can hang): resolves true once the opener says yes, false when it fails.
+const openUrl = (url) =>
+  new Promise((resolve) => {
+    let child;
+    try {
+      child = spawn(process.platform === 'darwin' ? 'open' : 'xdg-open', [url], { stdio: 'ignore', detached: true });
+    } catch {
+      return resolve(false);
+    }
+    const timer = setTimeout(() => resolve(false), 5000);
+    child.on('error', () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve(code === 0);
+    });
+    child.unref();
+  });
+
+/// The text on the clipboard, or ''. The same tools as the image below.
+const clipboardText = () => {
+  const run = (cmd, args) => execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 8 * 1024 * 1024, timeout: 5000 }).toString();
+  try {
+    if (process.platform === 'darwin') return run('pbpaste', []);
+    if (process.env.WAYLAND_DISPLAY) return run('wl-paste', ['--no-newline']);
+    return run('xclip', ['-selection', 'clipboard', '-o']);
+  } catch {
+    return '';
+  }
+};
+
+/// Put text on the clipboard. Returns false when this machine has no tool for it, so the
+/// caller can fall back to OSC 52, which asks the terminal to do it — the only way that
+/// works over ssh.
+const copyText = (text) => {
+  const run = (cmd, args) => execFileSync(cmd, args, { input: text, stdio: ['pipe', 'ignore', 'ignore'], timeout: 5000 });
+  try {
+    if (process.platform === 'darwin') run('pbcopy', []);
+    else if (process.env.WAYLAND_DISPLAY) run('wl-copy', []);
+    else run('xclip', ['-selection', 'clipboard', '-in']);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/// Files copied in a file manager (Finder's cmd+c, a file manager's copy): their paths, or [].
+/// Asked before the image: Finder also puts the file's icon on the clipboard as a picture, which
+/// would go out instead of the file. macOS reads the pasteboard's file URLs (all of them, through
+/// JXA); Linux reads text/uri-list from wl-paste or xclip.
+const clipboardFiles = () => {
+  const run = (cmd, args) => execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 8 * 1024 * 1024, timeout: 5000 }).toString();
+  let list = '';
+  try {
+    if (process.platform === 'darwin') {
+      const js = "ObjC.import('AppKit');const pb=$.NSPasteboard.generalPasteboard;const urls=pb.readObjectsForClassesOptions($([$.NSURL]),$({NSPasteboardURLReadingFileURLsOnlyKey:true}));const out=[];if(urls)for(let i=0;i<urls.count;i++)out.push(urls.objectAtIndex(i).path.js);out.join('\\n')";
+      list = run('osascript', ['-l', 'JavaScript', '-e', js]);
+    } else {
+      const uris = process.env.WAYLAND_DISPLAY
+        ? run('wl-paste', ['--list-types']).includes('text/uri-list') ? run('wl-paste', ['--type', 'text/uri-list']) : ''
+        : run('xclip', ['-selection', 'clipboard', '-t', 'TARGETS', '-o']).includes('text/uri-list') ? run('xclip', ['-selection', 'clipboard', '-t', 'text/uri-list', '-o']) : '';
+      list = uris.split(/\r?\n/).filter((u) => u.startsWith('file://')).map((u) => decodeURIComponent(new URL(u).pathname)).join('\n');
+    }
+  } catch {
+    return [];
+  }
+  return list.split('\n').map((f) => f.trim()).filter((f) => {
+    try {
+      return f && fs.statSync(f).isFile();
+    } catch {
+      return false;
+    }
+  });
+};
+
+/// The image on the clipboard as a png file, or null when there is none (or no tool for it).
+/// macOS asks the clipboard through osascript; Linux tries wl-paste, then xclip.
+const clipboardImage = () => {
+  const out = path.join(os.tmpdir(), `metacom-paste-${Date.now()}.png`);
+  const run = (cmd, args, opts = {}) => execFileSync(cmd, args, { stdio: ['ignore', 'pipe', 'ignore'], maxBuffer: 64 * 1024 * 1024, timeout: 5000, ...opts });
+  try {
+    if (process.platform === 'darwin') {
+      const script = `set p to POSIX file "${out}"\nset f to open for access p with write permission\ntry\nwrite (the clipboard as «class PNGf») to f\nend try\nclose access f`;
+      run('osascript', ['-e', script]);
+    } else if (process.env.WAYLAND_DISPLAY) {
+      const types = run('wl-paste', ['--list-types']).toString();
+      if (!types.includes('image/png')) return null;
+      fs.writeFileSync(out, run('wl-paste', ['--type', 'image/png']));
+    } else {
+      fs.writeFileSync(out, run('xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']));
+    }
+  } catch {
+    return null;
+  }
+  try {
+    if (fs.statSync(out).size > 8) return out;
+  } catch {
+    // nothing written
+  }
+  try {
+    fs.unlinkSync(out);
+  } catch {
+    // already gone
+  }
+  return null;
+};
+
+/// ` [shot.png 12 KB]` for message lines.
+const describe = (media) => (Array.isArray(media) && media.length ? ' ' + media.map((m) => `[${m.name} ${pretty(m.size || 0)}]`).join(' ') : '');
+
+module.exports = { TYPES, MEDIA_DIR, typeOf, resolvePath, attachable, attachables, attachment, upload, download, saveAs, openFile, openUrl, clipboardFiles, clipboardImage, clipboardText, copyText, describe, pretty };

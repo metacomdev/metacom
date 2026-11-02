@@ -1,0 +1,71 @@
+{
+  "name": "dev-studio",
+  "kind": "company",
+  "summary": "A small software team: plans the work, builds it on a branch with tests, reviews and tests it, and asks the owner before anything ships.",
+  "room": "devstudio",
+  "goal": "What are we building or fixing this week, in which repository?",
+  "example": "Add CSV export to the orders page of our Rails app (repo in this folder), with tests, ready to merge by Friday",
+  "lead": "lead",
+  "approve": [
+    "the plan, if it changes scope",
+    "merging, deploying or publishing anything"
+  ],
+  "review": {
+    "by": "reviewer",
+    "checks": "the diff line by line, that tests cover the change and pass when run, no secrets or debug code, and that it does what the plan says"
+  },
+  "loops": [
+    {
+      "target": "lead",
+      "every": "0 */4 * * 1-5",
+      "prompt": "Status: what landed on the branch, what is in review, what is blocked; one line each in the room."
+    }
+  ],
+  "rules": [
+    "Work in this repository, on a branch; never push to main, merge, deploy or publish without the owner's approval (hub_request, act only on APPROVED).",
+    "Run the tests before saying something works; say which command you ran and its result.",
+    "The reviewer reports what it actually finds; a real catch is kept, none is staged."
+  ],
+  "roles": [
+    {
+      "name": "lead",
+      "agent": "claude",
+      "budget": 30,
+      "does": "plans the work, splits it, takes it to the owner",
+      "instructions": "First post the plan with hub_say: the change in a few steps, the branch name, how it will be tested, and who does what. Give builder each step. When reviewer and tester pass it, ask the owner with hub_request to merge (or deploy), with the summary and the test results."
+    },
+    {
+      "name": "builder",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 20,
+      "does": "writes the code and its tests on the branch",
+      "instructions": "Implement each step on the branch with tests, run them, commit with clear messages. Hand each step to reviewer with hub_send: what changed, the commit, the test command and result."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "reviews every change",
+      "instructions": "Review each change as the review step says. Send real problems back to builder with file and line. When it holds, tell tester and lead: reviewed, with what you checked."
+    },
+    {
+      "name": "tester",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "runs the tests and tries the change as a user would",
+      "instructions": "Run the full test suite and try the change by hand (the commands, the page, the edge cases). Write what you ran and saw in artefacts/test-report.md. Tell lead: passes or fails, with the report."
+    }
+  ]
+}

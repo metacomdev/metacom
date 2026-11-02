@@ -1,0 +1,72 @@
+{
+  "name": "agency",
+  "kind": "company",
+  "summary": "A small creative agency: a brief in, a reviewed campaign out (concept, copy, assets list, schedule), with the owner signing off before anything reaches the client.",
+  "room": "agency",
+  "goal": "What should the agency make this week, and for whom?",
+  "example": "A launch campaign for a neighbourhood bakery's new breakfast menu: concept, three social posts, a poster text and a two-week schedule",
+  "lead": "director",
+  "approve": [
+    "the creative brief, before production starts",
+    "anything sent to the client or published"
+  ],
+  "review": {
+    "by": "reviewer",
+    "checks": "every claim, name, price and date against the brief and its sources, the copy for tone and typos, and that each deliverable in the brief exists"
+  },
+  "loops": [
+    {
+      "target": "director",
+      "every": "0 9 * * *",
+      "prompt": "Morning check: where is each deliverable, what is blocked, and what does the owner need to decide today? One short line per item in the room."
+    }
+  ],
+  "rules": [
+    "Work only in this folder; put what you make in artefacts/.",
+    "Facts, prices and claims come from real, public sources, each with its link and the date you checked it. Invent no customers, quotes, results or numbers.",
+    "Send, publish or submit nothing outside this room without the owner's approval: ask with hub_request and act only on APPROVED.",
+    "The reviewer reports what it actually finds; a real catch is kept, none is staged."
+  ],
+  "roles": [
+    {
+      "name": "director",
+      "agent": "claude",
+      "budget": 30,
+      "does": "turns the goal into a brief and a plan, assigns the work, takes it to the owner",
+      "instructions": "First post the plan with hub_say: the brief in five lines (audience, message, deliverables, tone, deadline) and who does what. Ask the owner to approve the brief with hub_request before production starts. Then assign: producer the schedule and assets list, writer the copy. When reviewer passes the work, post it for the owner's sign-off with what was checked."
+    },
+    {
+      "name": "producer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 15,
+      "does": "the schedule, the assets list and what each piece needs",
+      "instructions": "From the director's brief, write artefacts/schedule.md (what goes out when, on which channel) and artefacts/assets.md (each asset: format, size, text, who makes it). Hand both to reviewer with hub_send; fix what reviewer finds."
+    },
+    {
+      "name": "writer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 15,
+      "does": "the concept line and the copy",
+      "instructions": "From the brief, write artefacts/copy.md: the concept in one line, then every piece of copy the deliverables need, each under its heading. Keep claims to what the brief and its sources support. Hand it to reviewer with hub_send; fix what reviewer finds."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "args": [
+        "--model",
+        "sonnet"
+      ],
+      "budget": 10,
+      "does": "checks the work against the brief before the owner sees it",
+      "instructions": "When producer and writer hand you their work, check it as the review step says. Send real problems back to whoever owns them and check the fix. When it holds, tell director with hub_send: passed, with what you checked."
+    }
+  ]
+}

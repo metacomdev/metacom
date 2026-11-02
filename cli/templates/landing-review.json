@@ -1,0 +1,32 @@
+{
+  "name": "landing-review",
+  "summary": "Review and fix a landing page: a builder who changes it, a reviewer who scores it against a rubric, and a QA agent who measures it. How our own landing got to ship quality.",
+  "room": "landing",
+  "example": "Get the landing in site/ to ship quality: every rubric line 8 or more, Lighthouse 95+, no accessibility errors, nothing broken at 320 px",
+  "rules": [
+    "Work only in this folder. Deploy nothing and publish nothing.",
+    "Numbers, not impressions: every gate is reported with its measured value and how it was measured.",
+    "Claims on the page must be true today. Invent no customers, logos, quotes or metrics.",
+    "Ask the owner about copy that changes what the page promises, and about anything that needs an account or a key."
+  ],
+  "roles": [
+    {
+      "name": "builder",
+      "agent": "claude",
+      "does": "makes the changes and keeps the build green",
+      "instructions": "Find how the page builds and runs here, and say so in the room. Then take the reviewer's and QA's findings one at a time: fix, rebuild, and tell whoever found it with hub_send so they check again. Keep a short changelog in REVIEW.md."
+    },
+    {
+      "name": "reviewer",
+      "agent": "claude",
+      "does": "scores the page against the rubric and sends specific fixes",
+      "instructions": "Look at the page at 1440 and 390 px wide (screenshots). Score each line 1-10: the product visible in the first screen, one clear claim, type scale, composition, depth and detail, motion, proof, the call to action, brand. For every line under 8 send builder one specific fix. Score again after each round. When every line is 8 or more, post the scores with hub_say."
+    },
+    {
+      "name": "qa",
+      "agent": "claude",
+      "does": "measures performance, accessibility, links and every width",
+      "instructions": "Measure: Lighthouse (mobile), axe, layout shift, console errors, every link and anchor, and the page at 320, 390, 768 and 1440 px (nothing cut off, nothing overlapping). Send builder each failure with its number and how to reproduce it. Re-measure after fixes, and post the final numbers with hub_say."
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+# Agents in containers on the hub's own machine. Copy next to an env file per agent, e.g.
+# ~/.config/metacom-agents/{compose.yml,values.env}, set `context` to this checkout, then
+#   docker compose -f ~/.config/metacom-agents/compose.yml up -d --build
+#
+# values.env (mode 600) holds the secrets:
+#   MC_TOKEN=<agent token limited to the room: metacom token valuesbox --role agent --room values>
+#   ANTHROPIC_BASE_URL=https://openrouter.ai/api
+#   ANTHROPIC_AUTH_TOKEN=<OpenRouter key>
+#   ANTHROPIC_API_KEY=                     (empty on purpose: Claude Code then uses the token above)
+#   GH_TOKEN=<GitHub fine-grained token for that one repo>   (or `docker exec -it example-agent gh auth login`)
+#   AGENT_REPO=owner/repo                  (cloned into /work once GitHub is logged in)
+# After editing it: docker compose -f ~/.config/metacom-agents/compose.yml up -d --force-recreate values
+# The first start asks once to accept Claude's no-prompts mode; answer from the room: @valuesdev !keys down enter
+name: metacom-agents
+
+services:
+  # The hub listens on 127.0.0.1 only; this relays the docker bridge address to it, so containers
+  # reach the hub and nothing else on the host's loopback (databases and such).
+  hub-bridge:
+    image: alpine/socat
+    network_mode: host
+    restart: unless-stopped
+    command: TCP-LISTEN:8900,bind=172.17.0.1,fork,reuseaddr TCP:127.0.0.1:8900
+
+  values:
+    build:
+      context: ../
+      dockerfile: agent/Dockerfile
+    image: metacom-agent
+    container_name: example-agent
+    hostname: values-box # how it shows in the room: valuesdev @values-box
+    restart: unless-stopped
+    depends_on: [hub-bridge]
+    tty: true
+    stdin_open: true
+    env_file: values.env
+    environment:
+      MC_HUB_URL: ws://hub:8900/
+      AGENT_ROOM: values
+      AGENT_NAME: valuesdev
+      # the container is the sandbox, so the agent does not stop to ask before each command
+      CLAUDE_ARGS: --dangerously-skip-permissions
+    extra_hosts:
+      - hub:host-gateway
+    volumes:
+      - values-home:/home/node # Claude and gh logins
+      - values-work:/work # the checkout
+
+volumes:
+  values-home:
+  values-work:

@@ -1,0 +1,8 @@
+metacom
+Copyright 2026 Mavpa Inc. and contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes a vendored copy of the Metarhia metacom library in metacom/
+(https://github.com/metarhia/metacom), Copyright (c) 2018-2026 Metarhia contributors,
+licensed under the MIT License (see metacom/LICENSE).

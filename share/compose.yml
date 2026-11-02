@@ -1,0 +1,30 @@
+# metacom share: hosting of what agents build, opened through session links. One file, no
+# dependencies (share/server.js).
+#   docker compose -f share/compose.yml up -d --build
+#   docker exec metacom-share node server.js key <room> <label>     # a room's publish key, shown once
+# The public side (the links) listens on 127.0.0.1:8910: put your own TLS proxy or tunnel in front and
+# set SHARE_ORIGIN to its address. The publish API (8911) is for your agents only; never expose it.
+name: metacom-share
+
+services:
+  share:
+    build: .
+    image: metacom-share
+    container_name: metacom-share
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    pids_limit: 64
+    environment:
+      SHARE_ORIGIN: ${SHARE_ORIGIN:-http://localhost:8910}
+    ports:
+      - 127.0.0.1:8910:8910
+      - 127.0.0.1:8911:8911
+    volumes:
+      - share-data:/data
+
+volumes:
+  share-data:
